@@ -1,6 +1,11 @@
-use std::env;
+use cpal::{Device, Format};
 
-use cpal::{Device, Format, SampleFormat};
+use lazy_static::lazy_static;
+
+lazy_static! {
+static ref DEVICE: Device = cpal::default_input_device().expect("no default device");
+static ref FORMAT: Format = DEVICE.default_input_format().expect("no default format");
+}
 
 #[inline]
 pub fn sample_rate() -> u32 {
@@ -18,17 +23,16 @@ pub fn channels() -> u16 {
 }
 
 pub fn print_device_info() {
-    let device = default_device();
-    info!("Device: {}", device.name());
-    info!("Format: {:?}", device.default_input_format().expect("no default format"));
+    info!("Device: {}", default_device().name());
+    info!("Format: {:?}", default_format());
 }
 
 #[inline]
-fn default_device() -> Device {
-    cpal::default_input_device().expect("no default device")
+fn default_device() -> &'static Device {
+    &DEVICE
 }
 
 #[inline]
-fn default_format() -> Format {
-    default_device().default_input_format().expect("no default format")
+fn default_format() -> &'static Format {
+    &FORMAT
 }
