@@ -5,3 +5,8 @@ authors = ["luyi <luyi@newtranx.com>"]
 edition = "2018"
 
 [dependencies]
+hyper = "0.12"
+futures = "*"
+cpal = "0.9"
+log = "0.4"
+env_logger = "0.6"
