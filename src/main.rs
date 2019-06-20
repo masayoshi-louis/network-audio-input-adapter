@@ -10,17 +10,21 @@ use http::header::HdrName;
 use hyper::{Body, Method, Request, Response, Server, StatusCode};
 use hyper::service::service_fn;
 
+mod audio;
+
 fn main() {
     if env::var("RUST_LOG").is_err() {
         env::set_var("RUST_LOG", "info,network_audio_input_adapter=trace");
     }
     env_logger::init();
 
+    audio::print_device_info();
+
     let addr = ([0, 0, 0, 0], 3000).into();
 
     let server = Server::bind(&addr)
         .serve(|| service_fn(handle))
-        .map_err(|e| eprintln!("server error: {}", e));
+        .map_err(|e| error!("server error: {}", e));
 
     info!("Listening on http://{}", addr);
     hyper::rt::run(server);
@@ -28,16 +32,20 @@ fn main() {
 
 fn handle(req: Request<Body>) -> FutureResult<Response<Body>, hyper::Error> {
     let mut response = Response::new(Body::empty());
+    let req_tuple = (req.method(), req.uri().path());
+    {
+        let (m, p) = req_tuple;
+        debug!("Request: {} {}", m, p);
+    }
 
-    match (req.method(), req.uri().path()) {
+    match req_tuple {
         (&Method::HEAD, "/stream.raw") => {
-            trace!("HEAD request received");
             set_headers(&mut response);
         }
         (&Method::GET, "/stream.raw") => {
-            trace!("GET request received");
             set_headers(&mut response);
             let (tx, body) = Body::channel();
+            *response.body_mut() = body;
         }
         (_, "/stream.raw") => {
             *response.status_mut() = StatusCode::METHOD_NOT_ALLOWED;
@@ -52,8 +60,8 @@ fn handle(req: Request<Body>) -> FutureResult<Response<Body>, hyper::Error> {
 
 fn set_headers(response: &mut Response<Body>) {
     response.headers_mut().insert2(HdrName::custom(b"Content-Type", true), "application/x-hqplayer-raw".parse().unwrap());
-    response.headers_mut().insert2(HdrName::custom(b"X-HQPlayer-Raw-Title", true), "NetworkInput".parse().unwrap());
-    response.headers_mut().insert2(HdrName::custom(b"X-HQPlayer-Raw-SampleRate", true), "44100".parse().unwrap());
-    response.headers_mut().insert2(HdrName::custom(b"X-HQPlayer-Raw-Channels", true), "2".parse().unwrap());
-    response.headers_mut().insert2(HdrName::custom(b"X-HQPlayer-Raw-Format", true), "int16le".parse().unwrap());
+    response.headers_mut().insert2(HdrName::custom(b"X-HQPlayer-Raw-Title", true), "Network Input".parse().unwrap());
+    response.headers_mut().insert2(HdrName::custom(b"X-HQPlayer-Raw-SampleRate", true), audio::sample_rate().to_string().parse().unwrap());
+    response.headers_mut().insert2(HdrName::custom(b"X-HQPlayer-Raw-Channels", true), audio::channels().to_string().parse().unwrap());
+    response.headers_mut().insert2(HdrName::custom(b"X-HQPlayer-Raw-Format", true), format!("int{}le", audio::bit_depth()).parse().unwrap());
 }
