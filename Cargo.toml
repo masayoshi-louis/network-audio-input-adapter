@@ -6,7 +6,11 @@ edition = "2018"
 
 [dependencies]
 hyper = "0.12"
+http = "*"
 futures = "*"
 cpal = "0.9"
 log = "0.4"
 env_logger = "0.6"
+
+[patch.crates-io]
+http = { git = "https://github.com/masayoshi-louis/http.git" }
