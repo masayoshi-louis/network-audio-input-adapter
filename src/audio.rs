@@ -1,7 +1,10 @@
+use std::cmp::min;
+
 use cpal::{Device, Format};
 use failure::Error;
 use failure::format_err;
 use futures::Stream;
+use futures::sync::mpsc::UnboundedSender;
 use hound::Sample;
 
 use lazy_static::lazy_static;
@@ -66,7 +69,7 @@ pub fn start() -> impl Stream<Item=Vec<u8>, Error=Error> {
                     vec = Vec::new(); // empty, no memory allocated
                 }
             }
-            if tx.unbounded_send(vec).is_err() {
+            if !send(vec, &tx, 4096) {
                 info!("Session stopped");
                 event_loop.destroy_stream(stream_id);
             }
@@ -74,6 +77,33 @@ pub fn start() -> impl Stream<Item=Vec<u8>, Error=Error> {
         info!("EventLoop thread quit");
     });
     rx.map_err(|_| format_err!("Error"))
+}
+
+#[inline]
+fn send(buff: Vec<u8>, tx: &UnboundedSender<Vec<u8>>, chunk_size: usize) -> bool {
+    if buff.len() <= chunk_size {
+        return send0(buff, tx);
+    } else {
+        let mut p: usize = 0;
+        while p < buff.len() {
+            let chunk = &buff[p..min(p + chunk_size, buff.len())];
+            if !send0(chunk.to_owned(), tx) {
+                return false;
+            }
+            p += chunk.len();
+        }
+        return true;
+    }
+}
+
+#[inline]
+fn send0(buff: Vec<u8>, tx: &UnboundedSender<Vec<u8>>) -> bool {
+    let size = buff.len();
+    let successful = tx.unbounded_send(buff).is_ok();
+    if successful {
+        debug!("transferred {} bytes", size);
+    }
+    return successful;
 }
 
 #[inline]
