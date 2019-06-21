@@ -12,6 +12,8 @@ use hyper::service::service_fn;
 
 mod audio;
 
+const HTTP_STREAM_PATH: &'static str = "/stream.raw";
+
 fn main() {
     if env::var("RUST_LOG").is_err() {
         env::set_var("RUST_LOG", "info,network_audio_input_adapter=trace");
@@ -39,15 +41,16 @@ fn handle(req: Request<Body>) -> FutureResult<Response<Body>, hyper::Error> {
     }
 
     match req_tuple {
-        (&Method::HEAD, "/stream.raw") => {
+        (&Method::HEAD, HTTP_STREAM_PATH) => {
             set_headers(&mut response);
         }
-        (&Method::GET, "/stream.raw") => {
+        (&Method::GET, HTTP_STREAM_PATH) => {
             set_headers(&mut response);
-            let (tx, body) = Body::channel();
-            *response.body_mut() = body;
+//            let (tx, body) = Body::channel();
+//            *response.body_mut() = body;
+            *response.body_mut() = Body::wrap_stream(audio::start());
         }
-        (_, "/stream.raw") => {
+        (_, HTTP_STREAM_PATH) => {
             *response.status_mut() = StatusCode::METHOD_NOT_ALLOWED;
         }
         _ => {
@@ -63,5 +66,5 @@ fn set_headers(response: &mut Response<Body>) {
     response.headers_mut().insert2(HdrName::custom(b"X-HQPlayer-Raw-Title", true), "Network Input".parse().unwrap());
     response.headers_mut().insert2(HdrName::custom(b"X-HQPlayer-Raw-SampleRate", true), audio::sample_rate().to_string().parse().unwrap());
     response.headers_mut().insert2(HdrName::custom(b"X-HQPlayer-Raw-Channels", true), audio::channels().to_string().parse().unwrap());
-    response.headers_mut().insert2(HdrName::custom(b"X-HQPlayer-Raw-Format", true), format!("int{}le", audio::bit_depth()).parse().unwrap());
+    response.headers_mut().insert2(HdrName::custom(b"X-HQPlayer-Raw-Format", true), format!("float{}le", audio::bit_depth()).parse().unwrap());
 }
