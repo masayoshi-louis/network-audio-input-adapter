@@ -1,4 +1,4 @@
-use std::cmp::min;
+use std::cmp::{max, min};
 
 use cpal::{Device, Format};
 use failure::Error;
@@ -62,7 +62,10 @@ pub fn start() -> impl Stream<Item=Vec<u8>, Error=Error> {
                 cpal::StreamData::Input { buffer: cpal::UnknownTypeInputBuffer::F32(buffer) } => {
                     vec = Vec::with_capacity(buffer.len() * 4);
                     for &sample in buffer.iter() {
-                        sample.write(&mut vec, 32).expect("failed to write sample");
+                        let mut int_sample = (sample * 32768.0f32) as i32;
+                        int_sample = max(int_sample, -32768); // CLIP < 32768
+                        int_sample = min(int_sample, 32767);  // CLIP > 32767
+                        int_sample.write(&mut vec, 32).expect("failed to write sample");
                     }
                 }
                 _ => {

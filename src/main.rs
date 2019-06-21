@@ -66,5 +66,5 @@ fn set_headers(response: &mut Response<Body>) {
     response.headers_mut().insert2(HdrName::custom(b"X-HQPlayer-Raw-Title", true), "Network Input".parse().unwrap());
     response.headers_mut().insert2(HdrName::custom(b"X-HQPlayer-Raw-SampleRate", true), audio::sample_rate().to_string().parse().unwrap());
     response.headers_mut().insert2(HdrName::custom(b"X-HQPlayer-Raw-Channels", true), audio::channels().to_string().parse().unwrap());
-    response.headers_mut().insert2(HdrName::custom(b"X-HQPlayer-Raw-Format", true), format!("float{}le", audio::bit_depth()).parse().unwrap());
+    response.headers_mut().insert2(HdrName::custom(b"X-HQPlayer-Raw-Format", true), format!("int{}le", audio::bit_depth()).parse().unwrap());
 }
