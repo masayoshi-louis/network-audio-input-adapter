@@ -1,3 +1,6 @@
+#[macro_use]
+extern crate log;
+
 use std::env;
 
 use cpal::{Format, OutputBuffer, Sample as CpalSample, SampleFormat, SampleRate};
@@ -8,18 +11,25 @@ use hound::Sample;
 use hyper::Client;
 use hyper::rt::{self, Future, Stream};
 
-const URL: &'static str = "http://localhost:3000/stream.raw";
-const DEVICE_NAME: &'static str = "Luyi's QC30";
-
 fn main() {
     if env::var("RUST_LOG").is_err() {
         env::set_var("RUST_LOG", "debug");
     }
     env_logger::init();
 
+    let url = match env::args().nth(1) {
+        Some(url) => url,
+        None => {
+            println!("Usage: play <url>");
+            return;
+        }
+    };
+
+    let device_name = env::args().nth(2);
+
     // HTTPS requires picking a TLS implementation, so give a better
     // warning if the user tries to request an 'https' URL.
-    let url = URL.parse::<hyper::Uri>().unwrap();
+    let url = url.parse::<hyper::Uri>().unwrap();
     if url.scheme_part().map(|s| s.as_ref()) != Some("http") {
         println!("This example only works with 'http' URLs.");
         return;
@@ -27,7 +37,7 @@ fn main() {
 
     let (tx, rx) = mpsc::unbounded();
 
-    play_it(rx);
+    play_it(rx, device_name.as_ref());
 
     // Run the runtime with the future trying to fetch and print this URL.
     //
@@ -44,14 +54,14 @@ fn fetch_url(url: hyper::Uri, tx: mpsc::UnboundedSender<u8>) -> impl Future<Item
         .get(url)
         // And then, if we get a response back...
         .and_then(|res| {
-            println!("Response: {}", res.status());
-            println!("Headers: {:#?}", res.headers());
+            info!("Response: {}", res.status());
+            info!("Headers: {:#?}", res.headers());
 
             // The body is a stream, and for_each returns a new Future
             // when the stream is finished, and calls the closure on
             // each chunk of the body...
             res.into_body().for_each(move |chunk| {
-                println!("chunk size {}", chunk.len());
+                debug!("Chunk size {}", chunk.len());
                 for byte in chunk {
                     tx.unbounded_send(byte).expect("channel failure");
                 }
@@ -68,11 +78,15 @@ fn fetch_url(url: hyper::Uri, tx: mpsc::UnboundedSender<u8>) -> impl Future<Item
         })
 }
 
-fn play_it(rx: mpsc::UnboundedReceiver<u8>) {
+fn play_it(rx: mpsc::UnboundedReceiver<u8>, device_name: Option<impl AsRef<str>>) {
     let mut devices = cpal::devices();
-    let device = devices.find(|x| {
-        x.name() == DEVICE_NAME && x.supported_output_formats().expect("can not get output formats").peekable().peek().is_some()
-    }).expect("can not find device");
+    let device = if let Some(name) = device_name {
+        devices.find(|x| {
+            x.name() == name.as_ref() && x.supported_output_formats().expect("can not get output formats").peekable().peek().is_some()
+        }).expect("can not find device")
+    } else {
+        cpal::default_output_device().expect("can not find default device")
+    };
 
     println!("Using Device {}", device.name());
     let mut output_formats = device.supported_output_formats().expect("can not get output formats").peekable();
@@ -93,7 +107,7 @@ fn play_it(rx: mpsc::UnboundedReceiver<u8>) {
     event_loop.play_stream(stream_id.clone());
 
     std::thread::spawn(move || {
-        println!("Started!");
+        info!("Started!");
         let mut source = rx.wait();
         let mut sample_buff = [0u8; 4];
         event_loop.run(|_, data| {

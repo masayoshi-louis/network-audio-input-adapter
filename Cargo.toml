@@ -17,3 +17,6 @@ lazy_static = "1.3.0"
 
 [patch.crates-io]
 http = { git = "https://github.com/masayoshi-louis/http.git" }
+
+[profile.release]
+lto = true
