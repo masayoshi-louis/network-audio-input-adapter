@@ -1,3 +1,6 @@
+#[macro_use]
+extern crate log;
+
 use std::env;
 
 use cpal::{Format, OutputBuffer, Sample as CpalSample, SampleFormat, SampleRate};
@@ -51,14 +54,14 @@ fn fetch_url(url: hyper::Uri, tx: mpsc::UnboundedSender<u8>) -> impl Future<Item
         .get(url)
         // And then, if we get a response back...
         .and_then(|res| {
-            println!("Response: {}", res.status());
-            println!("Headers: {:#?}", res.headers());
+            info!("Response: {}", res.status());
+            info!("Headers: {:#?}", res.headers());
 
             // The body is a stream, and for_each returns a new Future
             // when the stream is finished, and calls the closure on
             // each chunk of the body...
             res.into_body().for_each(move |chunk| {
-                println!("chunk size {}", chunk.len());
+                debug!("Chunk size {}", chunk.len());
                 for byte in chunk {
                     tx.unbounded_send(byte).expect("channel failure");
                 }
@@ -104,7 +107,7 @@ fn play_it(rx: mpsc::UnboundedReceiver<u8>, device_name: Option<impl AsRef<str>>
     event_loop.play_stream(stream_id.clone());
 
     std::thread::spawn(move || {
-        println!("Started!");
+        info!("Started!");
         let mut source = rx.wait();
         let mut sample_buff = [0u8; 4];
         event_loop.run(|_, data| {
