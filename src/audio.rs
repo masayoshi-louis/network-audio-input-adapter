@@ -62,9 +62,10 @@ pub fn start() -> impl Stream<Item=Vec<u8>, Error=Error> {
                 cpal::StreamData::Input { buffer: cpal::UnknownTypeInputBuffer::F32(buffer) } => {
                     vec = Vec::with_capacity(buffer.len() * 4);
                     for &sample in buffer.iter() {
-                        let mut int_sample = (sample * 32768.0f32) as i32;
-                        int_sample = max(int_sample, -32768); // CLIP < 32768
-                        int_sample = min(int_sample, 32767);  // CLIP > 32767
+                        let mut i64_sample = (sample as f64 * 2147483648.0f64).round() as i64;
+                        i64_sample = max(i64_sample, -2147483648);
+                        i64_sample = min(i64_sample, 2147483647);
+                        let int_sample = i64_sample as i32;
                         int_sample.write(&mut vec, 32).expect("failed to write sample");
                     }
                 }

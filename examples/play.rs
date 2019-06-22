@@ -131,7 +131,7 @@ fn play_it(rx: mpsc::UnboundedReceiver<u8>, device_name: Option<impl AsRef<str>>
                             4,
                             32,
                         ).expect("can not read sample");
-                        *out_sample = (sample as f32) / 32768.0f32;
+                        *out_sample = ((sample as f64) / 2147483648.0f64) as f32;
                     }
                 }
                 _ => (),
