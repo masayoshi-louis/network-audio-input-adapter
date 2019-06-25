@@ -43,8 +43,7 @@ pub fn start() -> impl Stream<Item=Vec<u8>, Error=Error> {
     std::thread::spawn(move || {
         let mut active = true;
         let mut stopped = false;
-        // 100ms buffer
-        let mut chunk_buff = Vec::with_capacity(bit_depth() / 8 * sample_rate() as usize / 10 * channels() as usize);
+        let mut chunk_buff = new_chunk();
         info!("EventLoop thread started");
         event_loop.run(|stream_id, data| {
             if !active {
@@ -88,11 +87,16 @@ pub fn start() -> impl Stream<Item=Vec<u8>, Error=Error> {
 }
 
 #[inline]
+fn new_chunk() -> Vec<u8> {
+    // 100ms buffer
+    Vec::with_capacity(bit_depth() / 8 * sample_rate() as usize / 10 * channels() as usize)
+}
+
+#[inline]
 fn send_if_full(buff: &mut Vec<u8>, tx: &UnboundedSender<Vec<u8>>) -> bool {
     if buff.len() == buff.capacity() {
-        let cloned = buff.clone();
-        buff.clear();
-        send(cloned, tx)
+        let buff = std::mem::replace(buff, new_chunk());
+        send(buff, tx)
     } else {
         true
     }
