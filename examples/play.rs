@@ -118,8 +118,21 @@ fn play_it(rx: mpsc::UnboundedReceiver<u8>, device_name: Option<impl AsRef<str>>
                 cpal::StreamData::Output { buffer: cpal::UnknownTypeOutputBuffer::I16(buffer) } => {
                     transfer(buffer, &mut source, &mut sample_buff, 16);
                 }
-                cpal::StreamData::Output { buffer: cpal::UnknownTypeOutputBuffer::F32(buffer) } => {
-                    transfer(buffer, &mut source, &mut sample_buff, 32);
+                cpal::StreamData::Output { buffer: cpal::UnknownTypeOutputBuffer::F32(mut buffer) } => {
+                    //transfer(buffer, &mut source, &mut sample_buff, 32);
+                    for out_sample in buffer.iter_mut() {
+                        for i in 0..3 {
+                            sample_buff[i] = source.next().expect("can not get sample from channel").expect("channel error");
+                        }
+                        let mut sample_buff = &sample_buff[..];
+                        let sample = i32::read(
+                            &mut sample_buff,
+                            hound::SampleFormat::Int,
+                            3,
+                            24,
+                        ).expect("can not read sample");
+                        *out_sample = ((sample as f64) / 8388608.0f64) as f32;
+                    }
                 }
                 _ => (),
             }
