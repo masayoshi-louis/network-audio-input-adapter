@@ -42,17 +42,13 @@ pub fn start() -> impl Stream<Item=Vec<u8>, Error=Error> {
     let (tx, rx) = futures::sync::mpsc::unbounded();
     std::thread::spawn(move || {
         let mut active = true;
-        let mut stopped = false;
         let mut chunk_buff = new_chunk();
         info!("EventLoop thread started");
         event_loop.run(|stream_id, data| {
             if !active {
-                if !stopped {
-                    info!("Session stopped");
-                    event_loop.destroy_stream(stream_id);
-                    stopped = true;
-                }
-                return;
+                info!("Session stopped");
+                event_loop.destroy_stream(stream_id);
+                panic!("the only way to stop EventLoop");
             }
 
             match data {
@@ -81,7 +77,6 @@ pub fn start() -> impl Stream<Item=Vec<u8>, Error=Error> {
                 _ => {}
             }
         });
-        info!("EventLoop thread quit");
     });
     rx.map_err(|_| format_err!("Error"))
 }
