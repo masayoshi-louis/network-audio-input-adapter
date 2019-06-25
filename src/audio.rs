@@ -1,4 +1,4 @@
-use std::cmp::min;
+use std::cmp::{max, min};
 
 use cpal::{Device, Format};
 use failure::Error;
@@ -21,7 +21,7 @@ pub fn sample_rate() -> u32 {
 
 #[inline]
 pub fn bit_depth() -> usize {
-    format().data_type.sample_size() * 8
+    min(24, format().data_type.sample_size() * 8)
 }
 
 #[inline]
@@ -41,37 +41,45 @@ pub fn start() -> impl Stream<Item=Vec<u8>, Error=Error> {
     event_loop.play_stream(stream_id);
     let (tx, rx) = futures::sync::mpsc::unbounded();
     std::thread::spawn(move || {
+        let mut active = true;
+        let mut stopped = false;
+        // 100ms buffer
+        let mut chunk_buff = Vec::with_capacity(bit_depth() / 8 * sample_rate() as usize / 10 * channels() as usize);
         info!("EventLoop thread started");
         event_loop.run(|stream_id, data| {
-            let mut vec: Vec<u8>;
-            // Otherwise write to the wav writer.
+            if !active {
+                if !stopped {
+                    info!("Session stopped");
+                    event_loop.destroy_stream(stream_id);
+                    stopped = true;
+                }
+                return;
+            }
+
             match data {
                 cpal::StreamData::Input { buffer: cpal::UnknownTypeInputBuffer::U16(buffer) } => {
-                    vec = Vec::with_capacity(buffer.len() * 2);
                     for sample in buffer.iter() {
                         let sample = cpal::Sample::to_i16(sample);
-                        sample.write(&mut vec, 16).expect("failed to write sample");
+                        sample.write(&mut chunk_buff, 16).expect("failed to write sample");
+                        active = send_if_full(&mut chunk_buff, &tx);
                     }
                 }
                 cpal::StreamData::Input { buffer: cpal::UnknownTypeInputBuffer::I16(buffer) } => {
-                    vec = Vec::with_capacity(buffer.len() * 2);
                     for &sample in buffer.iter() {
-                        sample.write(&mut vec, 16).expect("failed to write sample");
+                        sample.write(&mut chunk_buff, 16).expect("failed to write sample");
+                        active = send_if_full(&mut chunk_buff, &tx);
                     }
                 }
                 cpal::StreamData::Input { buffer: cpal::UnknownTypeInputBuffer::F32(buffer) } => {
-                    vec = Vec::with_capacity(buffer.len() * 4);
                     for &sample in buffer.iter() {
-                        sample.write(&mut vec, 32).expect("failed to write sample");
+                        let mut int_sample = (sample * 8388608.0f32).round() as i32;
+                        int_sample = max(int_sample, -8388608);
+                        int_sample = min(int_sample, 8388607);
+                        int_sample.write(&mut chunk_buff, 24).expect("failed to write sample");
+                        active = send_if_full(&mut chunk_buff, &tx);
                     }
                 }
-                _ => {
-                    vec = Vec::new(); // empty, no memory allocated
-                }
-            }
-            if !send(vec, &tx, 4096) {
-                info!("Session stopped");
-                event_loop.destroy_stream(stream_id);
+                _ => {}
             }
         });
         info!("EventLoop thread quit");
@@ -80,24 +88,18 @@ pub fn start() -> impl Stream<Item=Vec<u8>, Error=Error> {
 }
 
 #[inline]
-fn send(buff: Vec<u8>, tx: &UnboundedSender<Vec<u8>>, chunk_size: usize) -> bool {
-    if buff.len() <= chunk_size {
-        return send0(buff, tx);
+fn send_if_full(buff: &mut Vec<u8>, tx: &UnboundedSender<Vec<u8>>) -> bool {
+    if buff.len() == buff.capacity() {
+        let cloned = buff.clone();
+        buff.clear();
+        send(cloned, tx)
     } else {
-        let mut p: usize = 0;
-        while p < buff.len() {
-            let chunk = &buff[p..min(p + chunk_size, buff.len())];
-            if !send0(chunk.to_owned(), tx) {
-                return false;
-            }
-            p += chunk.len();
-        }
-        return true;
+        true
     }
 }
 
 #[inline]
-fn send0(buff: Vec<u8>, tx: &UnboundedSender<Vec<u8>>) -> bool {
+fn send(buff: Vec<u8>, tx: &UnboundedSender<Vec<u8>>) -> bool {
     let size = buff.len();
     let successful = tx.unbounded_send(buff).is_ok();
     if successful {
