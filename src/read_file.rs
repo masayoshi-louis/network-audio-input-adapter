@@ -7,17 +7,16 @@ use futures::sync::mpsc::UnboundedSender;
 use hound::Sample;
 
 pub fn start() -> impl Stream<Item=Vec<u8>, Error=Error> {
-    let mut reader = hound::WavReader::open("./recorded.wav").unwrap();
+    let mut reader = hound::WavReader::open("./crosswalk.wav").unwrap();
     let (tx, rx) = futures::sync::mpsc::unbounded();
     std::thread::spawn(move || {
         let mut chunk_buff = new_chunk();
-        for sample in reader.samples::<f32>() {
+        let mut samples = 0u64;
+        for sample in reader.samples::<i32>() {
             match sample {
                 Ok(sample) => {
-                    let mut int_sample = (sample * 8388608.0f32).round() as i32;
-                    int_sample = max(int_sample, -8388608);
-                    int_sample = min(int_sample, 8388607);
-                    int_sample.write(&mut chunk_buff, 24).expect("failed to write sample");
+                    samples += 1;
+                    sample.write(&mut chunk_buff, 24).expect("failed to write sample");
                     send_if_full(&mut chunk_buff, &tx);
                 }
                 Err(_) => {
@@ -25,7 +24,7 @@ pub fn start() -> impl Stream<Item=Vec<u8>, Error=Error> {
                 }
             }
         }
-        info!("EOF");
+        info!("EOF, {} seconds", samples / 48000 / 2);
     });
     rx.map_err(|_| format_err!("Error"))
 }

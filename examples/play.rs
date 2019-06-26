@@ -2,6 +2,7 @@
 extern crate log;
 
 use std::env;
+use std::time::Duration;
 
 use cpal::{Format, OutputBuffer, Sample as CpalSample, SampleFormat, SampleRate};
 use futures::stream::Wait as StreamWait;
@@ -44,6 +45,7 @@ fn main() {
     // Note that in more complicated use cases, the runtime should probably
     // run on its own, and futures should just be spawned into it.
     rt::run(fetch_url(url, tx));
+    std::thread::sleep(Duration::from_secs(400));
 }
 
 fn fetch_url(url: hyper::Uri, tx: mpsc::UnboundedSender<u8>) -> impl Future<Item=(), Error=()> {
