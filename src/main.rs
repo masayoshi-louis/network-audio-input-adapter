@@ -11,6 +11,7 @@ use hyper::{Body, Method, Request, Response, Server, StatusCode};
 use hyper::service::service_fn;
 
 mod audio;
+mod read_file;
 
 const HTTP_STREAM_PATH: &'static str = "/stream.raw";
 
@@ -46,12 +47,17 @@ fn handle(req: Request<Body>) -> FutureResult<Response<Body>, hyper::Error> {
         }
         (&Method::GET, HTTP_STREAM_PATH) => {
             set_headers(&mut response);
-//            let (tx, body) = Body::channel();
-//            *response.body_mut() = body;
             *response.body_mut() = Body::wrap_stream(audio::start());
         }
         (_, HTTP_STREAM_PATH) => {
             *response.status_mut() = StatusCode::METHOD_NOT_ALLOWED;
+        }
+        (&Method::HEAD, "/file.raw") => {
+            set_headers(&mut response);
+        }
+        (&Method::GET, "/file.raw") => {
+            set_headers(&mut response);
+            *response.body_mut() = Body::wrap_stream(read_file::start());
         }
         _ => {
             *response.status_mut() = StatusCode::NOT_FOUND;
